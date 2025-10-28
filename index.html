@@ -383,6 +383,14 @@
         
         let filteredData = [];
 
+        function formatCliente(pedido) {
+            const nombres = pedido.CLIENTE_NOMBRES || pedido.CLIENTE_NOMBRE || '';
+            const apellidos = pedido.CLIENTE_APELLIDOS || pedido.CLIENTE_APELLIDO || '';
+            return (apellidos || nombres)
+                ? `${apellidos}${apellidos && nombres ? ', ' : ''}${nombres}`
+                : '';
+        }
+
         function handleFileUpload(event) {
             const file = event.target.files[0];
             if (!file) return;
@@ -433,14 +441,15 @@
             // Extraer sedes únicas (NOMBRE_ENVIO)
             allData.sedes = [...new Set(allData.pedidos.map(p => p.NOMBRE_ENVIO))].filter(s => s).sort();
             
-            // Extraer todos los usuarios únicos
-            allData.usuarios = [...new Set(allData.pedidos.map(p => p.CLIENTE_NOMBRE))].filter(u => u).sort();
+            // Enriquecer pedidos con nombre formateado y extraer usuarios únicos (APELLIDOS, NOMBRES)
+            allData.pedidos = allData.pedidos.map(p => ({ ...p, CLIENTE_FORMATTED: formatCliente(p) }));
+            allData.usuarios = [...new Set(allData.pedidos.map(p => p.CLIENTE_FORMATTED))].filter(u => u).sort();
             
             // Crear mapeo de usuarios por sede
             allData.usuariosPorSede = {};
             allData.pedidos.forEach(pedido => {
                 const sede = pedido.NOMBRE_ENVIO;
-                const usuario = pedido.CLIENTE_NOMBRE;
+                const usuario = pedido.CLIENTE_FORMATTED;
                 
                 if (sede && usuario) {
                     if (!allData.usuariosPorSede[sede]) {
@@ -657,9 +666,12 @@
             filteredData = allData.pedidos.filter(pedido => {
                 let match = true;
                 if (sedeFilter && pedido.NOMBRE_ENVIO !== sedeFilter) match = false;
-                if (usuarioFilter && pedido.CLIENTE_NOMBRE !== usuarioFilter) match = false;
+                if (usuarioFilter && pedido.CLIENTE_FORMATTED !== usuarioFilter) match = false;
                 return match;
             });
+
+            // Ordenar alfabéticamente por apellido (CLIENTE_FORMATTED)
+            filteredData.sort((a, b) => (a.CLIENTE_FORMATTED || '').localeCompare(b.CLIENTE_FORMATTED || '', 'es', { sensitivity: 'base' }));
 
             const totalProductos = filteredData.reduce((sum, pedido) => {
                 const lineas = allData.lineas.filter(l => l['CODIGO PEDIDO'] === pedido['CODIGO PEDIDO']);
@@ -689,6 +701,13 @@
                     `🏢 Centro de Trabajo: ${pedido.NOMBRE_ENVIO}` : 
                     `🏠 Envío a Domicilio`;
 
+                // Formato requerido: CLIENTE_APELLIDOS, CLIENTE_NOMBRES (con retrocompatibilidad)
+                const clienteNombres = pedido.CLIENTE_NOMBRES || pedido.CLIENTE_NOMBRE || '';
+                const clienteApellidos = pedido.CLIENTE_APELLIDOS || pedido.CLIENTE_APELLIDO || '';
+                const clienteNombreFormateado = (clienteApellidos || clienteNombres)
+                    ? `${clienteApellidos}${clienteApellidos && clienteNombres ? ', ' : ''}${clienteNombres}`
+                    : '-';
+
                 html += `
                     <div class="bg-white rounded-lg shadow-md overflow-hidden print-card print-page-break">
                         <!-- Header -->
@@ -711,7 +730,7 @@
                             <div class="grid grid-cols-3 gap-2 text-xs">
                                 <div>
                                     <p class="text-[9px] font-semibold text-gray-500 uppercase mb-0.5">Cliente</p>
-                                    <p class="text-sm font-bold text-brand-dark leading-tight">${pedido.CLIENTE_NOMBRE || '-'}</p>
+                                    <p class="text-sm font-bold text-brand-dark leading-tight">${clienteNombreFormateado}</p>
                                 </div>
                                 <div>
                                     <p class="text-[9px] font-semibold text-gray-500 uppercase mb-0.5">DNI</p>
