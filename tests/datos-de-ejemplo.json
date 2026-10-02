@@ -1,0 +1,51 @@
+{
+  "pedidos": [
+    {
+      "Código": "ORD-2026-000001",
+      "Fecha": "02/10/2026",
+      "Cliente": "Marta Ribas Soler",
+      "DNI": "00000001R",
+      "Email": "marta@ejemplo.test",
+      "Dirección completa": "Carrer Exemple 1",
+      "Ciudad": "Barcelona",
+      "Provincia": "Barcelona",
+      "Código Postal": "08001",
+      "País": "España",
+      "Total (Puntos)": 1999,
+      "Estado": "Pendiente",
+      "Sede": "Barcelona Sants",
+      "Método de Envío": "Centros de Entregas"
+    },
+    {
+      "Código": "ORD-2026-000002",
+      "Fecha": "02/10/2026",
+      "Cliente": "Jordi Vila Camps",
+      "DNI": "00000002V",
+      "Email": "jordi@ejemplo.test",
+      "Dirección completa": "Avinguda Exemple 2",
+      "Ciudad": "Girona",
+      "Código Postal": "17001",
+      "País": "España",
+      "Total (Puntos)": 2000,
+      "Estado": "Pendiente",
+      "Método de Envío": "Enviar a Domicilio"
+    },
+    {
+      "Código": "ORD-2026-000003",
+      "Fecha": "02/10/2026",
+      "Cliente": "Ana Pérez Ruiz",
+      "Dirección completa": "Oficina central",
+      "Total (Puntos)": 500,
+      "Estado": "Pendiente",
+      "Sede": "Barcelona Sants",
+      "Método de Envío": "Oficina Central"
+    }
+  ],
+  "lineas": [
+    { "SISTEMA EXTERNO": "GESTION", "ID": 1, "PEDIDO ID": 1, "CODIGO PEDIDO": "ORD-2026-000001", "PRODUCTO_NOMBRE": "Producto sin código de barras", "CANTIDAD REQUERIDA": 2 },
+    { "SISTEMA EXTERNO": "GESTION", "ID": 2, "PEDIDO ID": 1, "CODIGO PEDIDO": "ORD-2026-000001", "PRODUCTO_SKU": "ZB-00002", "BARCODE": "8436043331429", "PRODUCTO_NOMBRE": "Chorizo Vela Ibérico", "CANTIDAD REQUERIDA": 4 },
+    { "SISTEMA EXTERNO": "GESTION", "ID": 3, "PEDIDO ID": 1, "CODIGO PEDIDO": "ORD-2026-000001", "PRODUCTO_SKU": "ZB-00003", "BARCODE": "8410468004120", "PRODUCTO_NOMBRE": "Cuña de Queso Curado", "CANTIDAD REQUERIDA": 1 },
+    { "SISTEMA EXTERNO": "GESTION", "ID": 4, "PEDIDO ID": 2, "CODIGO PEDIDO": "ORD-2026-000002", "PRODUCTO_SKU": "ZB-00004", "BARCODE": "8410468004120", "PRODUCTO_NOMBRE": "Cuña de Queso Curado", "CANTIDAD REQUERIDA": 5 },
+    { "SISTEMA EXTERNO": "GESTION", "ID": 5, "PEDIDO ID": 3, "CODIGO PEDIDO": "ORD-2026-000003", "PRODUCTO_SKU": "ZB-00005", "BARCODE": "84104680", "PRODUCTO_NOMBRE": "Turrón de Jijona", "CANTIDAD REQUERIDA": 3 }
+  ]
+}

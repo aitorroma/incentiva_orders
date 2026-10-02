@@ -250,7 +250,7 @@
                         Cargar archivo Excel de pedidos
                     </h3>
                     <p class="mt-1 text-sm text-gray-500">
-                        Formato: .xlsx con hojas "Pedidos eCommerce" y "Productos de Pedidos"
+                        Formato: .xlsx exportado desde Pedidos → Exportar, con las hojas "Usuarios con Pedidos" y "Productos de Pedidos"
                     </p>
                     <div class="mt-4">
                         <label for="fileInput" class="cursor-pointer inline-flex items-center px-6 py-3 bg-brand-vibrant-orange text-white font-semibold rounded-lg hover:bg-orange-600 transition-colors">
@@ -299,7 +299,7 @@
                     <h3 class="text-lg font-heading font-bold text-brand-dark mb-4">🎯 Filtros</h3>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                            <label class="block text-sm font-semibold text-brand-dark mb-2">Sede (NOMBRE_ENVIO)</label>
+                            <label class="block text-sm font-semibold text-brand-dark mb-2">Sede</label>
                             <select id="sedeFilterResumen" onchange="filterResumen()" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-vibrant-orange focus:border-transparent">
                                 <option value="">Todas las sedes</option>
                             </select>
@@ -337,7 +337,7 @@
                     <h3 class="text-lg font-heading font-bold text-brand-dark mb-4">🎯 Filtros</h3>
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div>
-                            <label class="block text-sm font-semibold text-brand-dark mb-2">Sede (NOMBRE_ENVIO)</label>
+                            <label class="block text-sm font-semibold text-brand-dark mb-2">Sede</label>
                             <select id="sedeFilter" onchange="updateUsuarioFilter(); filterPedidos();" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-vibrant-orange focus:border-transparent">
                                 <option value="">Todas las sedes</option>
                             </select>
@@ -383,12 +383,104 @@
         
         let filteredData = [];
 
+        // ─── El Excel de Ƶenksbox ───
+        // Nombres de las hojas y de las columnas tal y como los exporta la
+        // plataforma. Si algún día cambian, se tocan aquí y nada más.
+        const HOJA_PEDIDOS = 'Usuarios con Pedidos';
+        const HOJA_LINEAS = 'Productos de Pedidos';
+
+        const COL = {
+            codigo: 'Código',
+            fecha: 'Fecha',
+            cliente: 'Cliente',
+            dni: 'DNI',
+            email: 'Email',
+            direccion: 'Dirección completa',
+            ciudad: 'Ciudad',
+            provincia: 'Provincia',
+            cp: 'Código Postal',
+            pais: 'País',
+            telefono: 'Teléfono',
+            total: 'Total (Puntos)',
+            estado: 'Estado',
+            sede: 'Sede',
+            envio: 'Método de Envío',
+            comentarios: 'Comentarios'
+        };
+
+        const LINEA = {
+            pedido: 'CODIGO PEDIDO',
+            sku: 'PRODUCTO_SKU',
+            barcode: 'BARCODE',
+            nombre: 'PRODUCTO_NOMBRE',
+            cantidad: 'CANTIDAD REQUERIDA'
+        };
+
+        // Lee una columna sin que una tilde, una mayúscula o un espacio de más
+        // la dejen en blanco: «Código Postal» y «CODIGO POSTAL» son la misma.
+        function normalizaClave(texto) {
+            return String(texto ?? '')
+                .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+                .trim().toLowerCase().replace(/\s+/g, ' ');
+        }
+
+        function campo(fila, nombre) {
+            if (!fila) return '';
+            if (fila[nombre] !== undefined && fila[nombre] !== null) return fila[nombre];
+            const buscada = normalizaClave(nombre);
+            for (const clave of Object.keys(fila)) {
+                if (normalizaClave(clave) === buscada) {
+                    return fila[clave] ?? '';
+                }
+            }
+            return '';
+        }
+
+        function texto(fila, nombre) {
+            return String(campo(fila, nombre) ?? '').trim();
+        }
+
+        /** El pedido va a una sede o al domicilio del cliente. */
+        function esDomicilio(pedido) {
+            return /domicilio|casa/i.test(texto(pedido, COL.envio));
+        }
+
+        /** Por lo que se agrupa y se filtra: la sede, o el domicilio si no la hay. */
+        function sedeDe(pedido) {
+            const sede = texto(pedido, COL.sede);
+            if (sede) return sede;
+            if (esDomicilio(pedido)) return 'Envío a domicilio';
+            return texto(pedido, COL.envio) || 'Sin sede';
+        }
+
+        function codigoDe(pedido) {
+            return texto(pedido, COL.codigo);
+        }
+
+        /** Las líneas de un pedido, cruzadas por el código. */
+        function lineasDe(pedido) {
+            const codigo = codigoDe(pedido);
+            return allData.lineas.filter(l => texto(l, LINEA.pedido) === codigo);
+        }
+
         function formatCliente(pedido) {
-            const nombres = pedido.CLIENTE_NOMBRES || pedido.CLIENTE_NOMBRE || '';
-            const apellidos = pedido.CLIENTE_APELLIDOS || pedido.CLIENTE_APELLIDO || '';
-            return (apellidos || nombres)
-                ? `${apellidos}${apellidos && nombres ? ', ' : ''}${nombres}`
-                : '';
+            return texto(pedido, COL.cliente);
+        }
+
+        /** La dirección de la hoja, completada con provincia y país si los trae. */
+        function direccionCompleta(pedido) {
+            const partes = [
+                texto(pedido, COL.direccion),
+                texto(pedido, COL.provincia),
+                texto(pedido, COL.pais)
+            ].filter(Boolean);
+
+            return partes.length ? partes.join(' · ') : '-';
+        }
+
+        /** Un id por línea para el <svg> del código de barras. */
+        function idDeBarcode(codigoPedido, indice) {
+            return `barcode-${String(codigoPedido).replace(/[^A-Za-z0-9_-]/g, '')}-${indice}`;
         }
 
         function handleFileUpload(event) {
@@ -406,11 +498,12 @@
                     const workbook = XLSX.read(data, { type: 'array' });
 
                     // Leer hojas
-                    const pedidosSheet = workbook.Sheets['Pedidos eCommerce'];
-                    const lineasSheet = workbook.Sheets['Productos de Pedidos'];
+                    const pedidosSheet = workbook.Sheets[HOJA_PEDIDOS];
+                    const lineasSheet = workbook.Sheets[HOJA_LINEAS];
 
                     if (!pedidosSheet || !lineasSheet) {
-                        alert('Error: El archivo debe contener las hojas "Pedidos eCommerce" y "Productos de Pedidos"');
+                        alert(`El archivo debe contener las hojas "${HOJA_PEDIDOS}" y "${HOJA_LINEAS}".\n\n` +
+                              'Descárgalo desde Pedidos → Exportar en la plataforma.');
                         resetUpload();
                         return;
                     }
@@ -438,17 +531,26 @@
         }
 
         function processData() {
-            // Extraer sedes únicas (NOMBRE_ENVIO)
-            allData.sedes = [...new Set(allData.pedidos.map(p => p.NOMBRE_ENVIO))].filter(s => s).sort();
-            
-            // Enriquecer pedidos con nombre formateado y extraer usuarios únicos (APELLIDOS, NOMBRES)
-            allData.pedidos = allData.pedidos.map(p => ({ ...p, CLIENTE_FORMATTED: formatCliente(p) }));
-            allData.usuarios = [...new Set(allData.pedidos.map(p => p.CLIENTE_FORMATTED))].filter(u => u).sort();
+            // Sólo las filas que son un pedido de verdad
+            allData.pedidos = allData.pedidos.filter(p => codigoDe(p));
+
+            // Cada pedido se queda con su sede y su cliente ya resueltos
+            allData.pedidos = allData.pedidos.map(p => ({
+                ...p,
+                SEDE: sedeDe(p),
+                CLIENTE_FORMATTED: formatCliente(p)
+            }));
+
+            allData.sedes = [...new Set(allData.pedidos.map(p => p.SEDE))].filter(s => s)
+                .sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
+
+            allData.usuarios = [...new Set(allData.pedidos.map(p => p.CLIENTE_FORMATTED))].filter(u => u)
+                .sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
             
             // Crear mapeo de usuarios por sede
             allData.usuariosPorSede = {};
             allData.pedidos.forEach(pedido => {
-                const sede = pedido.NOMBRE_ENVIO;
+                const sede = pedido.SEDE;
                 const usuario = pedido.CLIENTE_FORMATTED;
                 
                 if (sede && usuario) {
@@ -461,7 +563,8 @@
             
             // Convertir Sets a Arrays ordenados
             Object.keys(allData.usuariosPorSede).forEach(sede => {
-                allData.usuariosPorSede[sede] = [...allData.usuariosPorSede[sede]].sort();
+                allData.usuariosPorSede[sede] = [...allData.usuariosPorSede[sede]]
+                    .sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
             });
 
             // Poblar filtros
@@ -524,20 +627,20 @@
             
             let pedidosFiltrados = allData.pedidos;
             if (sedeFilter) {
-                pedidosFiltrados = allData.pedidos.filter(p => p.NOMBRE_ENVIO === sedeFilter);
+                pedidosFiltrados = allData.pedidos.filter(p => p.SEDE === sedeFilter);
             }
 
             // Agrupar productos por sede
             const resumenPorSede = {};
             
             pedidosFiltrados.forEach(pedido => {
-                const sede = pedido.NOMBRE_ENVIO || 'Sin sede';
-                const lineasPedido = allData.lineas.filter(l => l['CODIGO PEDIDO'] === pedido['CODIGO PEDIDO']);
+                const sede = pedido.SEDE || 'Sin sede';
+                const lineasPedido = lineasDe(pedido);
                 
                 if (!resumenPorSede[sede]) {
                     resumenPorSede[sede] = {
                         sede: sede,
-                        direccion: pedido.DIRECCION_ENVIO || '-',
+                        direccion: texto(pedido, COL.direccion) || '-',
                         pedidos: 0,
                         productos: {}
                     };
@@ -546,14 +649,15 @@
                 resumenPorSede[sede].pedidos++;
                 
                 lineasPedido.forEach(linea => {
-                    const producto = linea.PRODUCTO_NOMBRE;
-                    const cantidad = linea['CANTIDAD REQUERIDA'] || 0;
+                    const producto = texto(linea, LINEA.nombre);
+                    const cantidad = Number(campo(linea, LINEA.cantidad)) || 0;
                     
                     if (!resumenPorSede[sede].productos[producto]) {
                         resumenPorSede[sede].productos[producto] = {
                             nombre: producto,
                             cantidad: 0,
-                            barcode: linea.BARCODE || ''
+                            barcode: texto(linea, LINEA.barcode),
+                            sku: texto(linea, LINEA.sku)
                         };
                     }
                     
@@ -665,7 +769,7 @@
 
             filteredData = allData.pedidos.filter(pedido => {
                 let match = true;
-                if (sedeFilter && pedido.NOMBRE_ENVIO !== sedeFilter) match = false;
+                if (sedeFilter && pedido.SEDE !== sedeFilter) match = false;
                 if (usuarioFilter && pedido.CLIENTE_FORMATTED !== usuarioFilter) match = false;
                 return match;
             });
@@ -673,10 +777,7 @@
             // Ordenar alfabéticamente por apellido (CLIENTE_FORMATTED)
             filteredData.sort((a, b) => (a.CLIENTE_FORMATTED || '').localeCompare(b.CLIENTE_FORMATTED || '', 'es', { sensitivity: 'base' }));
 
-            const totalProductos = filteredData.reduce((sum, pedido) => {
-                const lineas = allData.lineas.filter(l => l['CODIGO PEDIDO'] === pedido['CODIGO PEDIDO']);
-                return sum + lineas.length;
-            }, 0);
+            const totalProductos = filteredData.reduce((sum, pedido) => sum + lineasDe(pedido).length, 0);
 
             document.getElementById('pedidosCount').textContent = 
                 `Mostrando ${filteredData.length} pedido(s) con ${totalProductos} producto(s)`;
@@ -693,20 +794,14 @@
             let html = '';
 
             filteredData.forEach((pedido, index) => {
-                const lineasPedido = allData.lineas.filter(l => 
-                    l['CODIGO PEDIDO'] === pedido['CODIGO PEDIDO']
-                );
+                const lineasPedido = lineasDe(pedido);
+                const codigoPedido = codigoDe(pedido);
 
-                const tipoEnvio = pedido.IS_CENTROTRABAJO ? 
-                    `🏢 Centro de Trabajo: ${pedido.NOMBRE_ENVIO}` : 
-                    `🏠 Envío a Domicilio`;
+                const tipoEnvio = esDomicilio(pedido)
+                    ? '🏠 Envío a Domicilio'
+                    : `🏢 ${pedido.SEDE}`;
 
-                // Formato requerido: CLIENTE_APELLIDOS, CLIENTE_NOMBRES (con retrocompatibilidad)
-                const clienteNombres = pedido.CLIENTE_NOMBRES || pedido.CLIENTE_NOMBRE || '';
-                const clienteApellidos = pedido.CLIENTE_APELLIDOS || pedido.CLIENTE_APELLIDO || '';
-                const clienteNombreFormateado = (clienteApellidos || clienteNombres)
-                    ? `${clienteApellidos}${clienteApellidos && clienteNombres ? ', ' : ''}${clienteNombres}`
-                    : '-';
+                const clienteNombreFormateado = pedido.CLIENTE_FORMATTED || '-';
 
                 html += `
                     <div class="bg-white rounded-lg shadow-md overflow-hidden print-card print-page-break">
@@ -715,7 +810,7 @@
                             <div class="flex justify-between items-start">
                                 <div>
                                     <h3 class="text-white font-heading font-bold text-lg mb-0.5">
-                                        PEDIDO: ${pedido['CODIGO PEDIDO']}
+                                        PEDIDO: ${codigoPedido}
                                     </h3>
                                     <p class="text-white text-xs opacity-90">${tipoEnvio}</p>
                                 </div>
@@ -734,15 +829,15 @@
                                 </div>
                                 <div>
                                     <p class="text-[9px] font-semibold text-gray-500 uppercase mb-0.5">DNI</p>
-                                    <p class="text-sm text-brand-dark font-semibold">${pedido.CLIENTE_DNI || '-'}</p>
+                                    <p class="text-sm text-brand-dark font-semibold">${texto(pedido, COL.dni) || '-'}</p>
                                 </div>
                                 <div>
                                     <p class="text-[9px] font-semibold text-gray-500 uppercase mb-0.5">CP / Población</p>
-                                    <p class="text-sm text-brand-dark font-semibold">${pedido.DIRECCION_CODIGO_POSTAL || '-'} / ${pedido.DIRECCION_CIUDAD || '-'}</p>
+                                    <p class="text-sm text-brand-dark font-semibold">${texto(pedido, COL.cp) || '-'} / ${texto(pedido, COL.ciudad) || '-'}</p>
                                 </div>
                                 <div class="col-span-3">
                                     <p class="text-[9px] font-semibold text-gray-500 uppercase mb-0.5">Dirección de Envío</p>
-                                    <p class="text-sm text-brand-dark font-medium leading-tight">${pedido.DIRECCION_ENVIO || '-'}</p>
+                                    <p class="text-sm text-brand-dark font-medium leading-tight">${direccionCompleta(pedido)}</p>
                                 </div>
                             </div>
                         </div>
@@ -759,20 +854,20 @@
                 `;
 
                 lineasPedido.forEach((linea, idx) => {
-                    const barcodeId = `barcode-${pedido['CODIGO PEDIDO']}-${idx}`;
-                    const hasBarcode = linea.BARCODE && linea.BARCODE.toString().length >= 8;
+                    const barcodeId = idDeBarcode(codigoPedido, idx);
+                    const hasBarcode = texto(linea, LINEA.barcode).length >= 8;
                     
                     html += `
                         <div class="print-product-item flex items-center gap-3 p-2 rounded border border-gray-300 bg-white">
                             <div class="checkbox-print"></div>
                             <div class="flex-1 min-w-0">
-                                <p class="product-name text-sm text-brand-dark leading-tight">${linea.PRODUCTO_NOMBRE || '-'}</p>
+                                <p class="product-name text-sm text-brand-dark leading-tight">${texto(linea, LINEA.nombre) || '-'}</p>
                             </div>
                             <div class="right-group flex items-center gap-2 flex-shrink-0">
                                 <div class="text-center">
                                     <span class="qty-label text-[8px] font-semibold text-gray-500 uppercase block mb-0.5">CANTIDAD:</span>
                                     <span class="inline-block bg-brand-vibrant-orange text-white px-3 py-1.5 rounded font-bold text-lg">
-                                        ${linea['CANTIDAD REQUERIDA'] || 0}
+                                        ${Number(campo(linea, LINEA.cantidad)) || 0}
                                     </span>
                                 </div>
                                 ${hasBarcode ? `
@@ -826,17 +921,15 @@
             if (filteredData.length > 0) {
                 setTimeout(() => {
                     filteredData.forEach((pedido, index) => {
-                        const lineasPedido = allData.lineas.filter(l => 
-                            l['CODIGO PEDIDO'] === pedido['CODIGO PEDIDO']
-                        );
+                        const lineasPedido = lineasDe(pedido);
                         
                         lineasPedido.forEach((linea, idx) => {
-                            const barcodeId = `barcode-${pedido['CODIGO PEDIDO']}-${idx}`;
+                            const barcodeId = idDeBarcode(codigoDe(pedido), idx);
                             const barcodeElement = document.getElementById(barcodeId);
+                            const barcodeValue = texto(linea, LINEA.barcode);
                             
-                            if (barcodeElement && linea.BARCODE) {
+                            if (barcodeElement && barcodeValue) {
                                 try {
-                                    const barcodeValue = linea.BARCODE.toString().trim();
                                     
                                     // Determinar el formato del código de barras
                                     let format = 'CODE128';
@@ -862,7 +955,7 @@
                                 } catch (error) {
                                     console.error(`Error generando código de barras para ${barcodeId}:`, error);
                                     // Si falla, mostrar el código como texto
-                                    barcodeElement.innerHTML = `<text class="text-xs font-mono">${linea.BARCODE}</text>`;
+                                    barcodeElement.innerHTML = `<text class="text-xs font-mono">${barcodeValue}</text>`;
                                 }
                             }
                         });
