@@ -39,7 +39,7 @@ globalThis.XLSX = {};
 globalThis.alert = (m) => { throw new Error('alert inesperado: ' + m); };
 globalThis.setTimeout = (fn) => fn();
 
-const app = new Function(`${js}\n; return { processData, allData, campo, texto, sedeDe, esDomicilio, codigoDe, lineasDe, direccionCompleta, idDeBarcode, COL, LINEA };`)();
+const app = new Function(`${js}\n; return { processData, allData, campo, texto, sedeDe, esDomicilio, codigoDe, lineasDe, direccionCompleta, svgDeCodigo, formatoDeCodigo, COL, LINEA };`)();
 
 app.allData.pedidos = datos.pedidos;
 app.allData.lineas = datos.lineas;
@@ -82,7 +82,9 @@ comprueba('líneas del primer pedido', app.lineasDe(primero).length, 3);
 comprueba('las de otro pedido no se cuelan', app.lineasDe(app.allData.pedidos[1]).length, 1);
 comprueba('cantidad de una línea', Number(app.campo(app.lineasDe(primero)[1], app.LINEA.cantidad)), 4);
 comprueba('un producto sin código de barras no rompe', app.texto(app.lineasDe(primero)[0], app.LINEA.barcode), '');
-comprueba('id de barcode sin caracteres raros', app.idDeBarcode('ORD/2026 1', 0), 'barcode-ORD20261-0');
+comprueba('EAN de 13 cifras como EAN-13', app.formatoDeCodigo('8410128000400'), 'EAN13');
+comprueba('código no numérico como CODE128', app.formatoDeCodigo('ABC-123'), 'CODE128');
+comprueba('el hueco del código escapa comillas', app.svgDeCodigo('a"b').includes('data-codigo="a&quot;b"'), true);
 
 // ─── Lo que acaba en pantalla ───
 const fichas = nodo('pedidosContent').innerHTML;
@@ -92,6 +94,7 @@ comprueba('la ficha trae el cliente', fichas.includes('Marta Ribas Soler'), true
 comprueba('la ficha trae la sede', fichas.includes('🏢 Barcelona Sants'), true);
 comprueba('la ficha marca el domicilio', fichas.includes('🏠 Envío a Domicilio'), true);
 comprueba('sin «undefined» por la página', fichas.includes('undefined'), false);
+comprueba('el resumen dibuja códigos de barras', nodo('resumenContent').innerHTML.includes('data-codigo='), true);
 comprueba('sin «[object Object]»', fichas.includes('[object Object]'), false);
 
 const resumen = nodo('resumenContent').innerHTML;

@@ -478,9 +478,42 @@
             return partes.length ? partes.join(' · ') : '-';
         }
 
-        /** Un id por línea para el <svg> del código de barras. */
-        function idDeBarcode(codigoPedido, indice) {
-            return `barcode-${String(codigoPedido).replace(/[^A-Za-z0-9_-]/g, '')}-${indice}`;
+        /** El hueco de un código de barras; dibujarCodigos() lo rellena. */
+        function svgDeCodigo(valor) {
+            return `<svg class="barcode-svg" data-codigo="${String(valor).replace(/"/g, '&quot;')}"></svg>`;
+        }
+
+        /** Formato del código: EAN-13 como en el producto, o lo que corresponda a su longitud. */
+        function formatoDeCodigo(valor) {
+            if (/^\d{13}$/.test(valor)) return 'EAN13';
+            if (/^\d{8}$/.test(valor)) return 'EAN8';
+            if (/^\d{12}$/.test(valor)) return 'UPC';
+            return 'CODE128';
+        }
+
+        /** Dibuja todos los códigos de barras pendientes dentro de un contenedor. */
+        function dibujarCodigos(contenedor) {
+            contenedor.querySelectorAll('svg[data-codigo]').forEach(svg => {
+                const valor = svg.dataset.codigo;
+                try {
+                    JsBarcode(svg, valor, {
+                        format: formatoDeCodigo(valor),
+                        width: 1.4,
+                        height: 40,
+                        displayValue: true,
+                        font: 'Arial',
+                        fontSize: 14,
+                        textMargin: 1,
+                        margin: 4,
+                        background: '#ffffff',
+                        lineColor: '#000000'
+                    });
+                } catch (error) {
+                    // Un EAN con el dígito de control mal: se deja el número a la vista
+                    console.error(`Código de barras no válido: ${valor}`, error);
+                    svg.outerHTML = `<span class="font-mono text-xs">${valor}</span>`;
+                }
+            });
         }
 
         function handleFileUpload(event) {
@@ -743,7 +776,7 @@
                                     ${producto.cantidad}
                                 </span>
                             </td>
-                            <td class="px-4 py-3 font-mono text-xs">${producto.barcode}</td>
+                            <td class="px-4 py-3">${producto.barcode ? `<div class="barcode-container">${svgDeCodigo(producto.barcode)}</div>` : '-'}</td>
                         </tr>
                     `;
                 });
@@ -757,6 +790,7 @@
             });
 
             container.innerHTML = html;
+            dibujarCodigos(container);
         }
 
         function generatePedidos() {
@@ -853,9 +887,9 @@
                             <div class="space-y-1">
                 `;
 
-                lineasPedido.forEach((linea, idx) => {
-                    const barcodeId = idDeBarcode(codigoPedido, idx);
-                    const hasBarcode = texto(linea, LINEA.barcode).length >= 8;
+                lineasPedido.forEach(linea => {
+                    const barcode = texto(linea, LINEA.barcode);
+                    const hasBarcode = barcode.length >= 8;
                     
                     html += `
                         <div class="print-product-item flex items-center gap-3 p-2 rounded border border-gray-300 bg-white">
@@ -874,7 +908,7 @@
                                 <div class="text-center">
                                     <span class="ean-label text-[8px] font-semibold text-gray-500 uppercase block mb-0.5">EAN:</span>
                                     <div class="barcode-container">
-                                        <svg id="${barcodeId}" class="barcode-svg"></svg>
+                                        ${svgDeCodigo(barcode)}
                                     </div>
                                 </div>
                                 ` : ''}
@@ -917,51 +951,7 @@
 
             container.innerHTML = html;
             
-            // Generar códigos de barras después de insertar el HTML
-            if (filteredData.length > 0) {
-                setTimeout(() => {
-                    filteredData.forEach((pedido, index) => {
-                        const lineasPedido = lineasDe(pedido);
-                        
-                        lineasPedido.forEach((linea, idx) => {
-                            const barcodeId = idDeBarcode(codigoDe(pedido), idx);
-                            const barcodeElement = document.getElementById(barcodeId);
-                            const barcodeValue = texto(linea, LINEA.barcode);
-                            
-                            if (barcodeElement && barcodeValue) {
-                                try {
-                                    
-                                    // Determinar el formato del código de barras
-                                    let format = 'CODE128';
-                                    if (barcodeValue.length === 13 && /^\d+$/.test(barcodeValue)) {
-                                        format = 'EAN13';
-                                    } else if (barcodeValue.length === 8 && /^\d+$/.test(barcodeValue)) {
-                                        format = 'EAN8';
-                                    } else if (barcodeValue.length === 12 && /^\d+$/.test(barcodeValue)) {
-                                        format = 'UPC';
-                                    }
-                                    
-                                    JsBarcode(barcodeElement, barcodeValue, {
-                                        format: format,
-                                        width: 1.2,
-                                        height: 26,
-                                        displayValue: false,
-                                        fontSize: 9,
-                                        margin: 1,
-                                        background: '#ffffff',
-                                        marginTop: 0,
-                                        marginBottom: 0
-                                    });
-                                } catch (error) {
-                                    console.error(`Error generando código de barras para ${barcodeId}:`, error);
-                                    // Si falla, mostrar el código como texto
-                                    barcodeElement.innerHTML = `<text class="text-xs font-mono">${barcodeValue}</text>`;
-                                }
-                            }
-                        });
-                    });
-                }, 100);
-            }
+            dibujarCodigos(container);
         }
 
         function showTab(tabName) {
