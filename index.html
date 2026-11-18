@@ -13,7 +13,7 @@
     <title>Zenksbox - Gestión de Pedidos eCommerce</title>
     
     <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="assets/tailwind.css">
     
     <!-- Flowbite -->
     <link href="https://cdn.jsdelivr.net/npm/flowbite@2.5.1/dist/flowbite.min.css" rel="stylesheet" />
@@ -29,28 +29,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@400;700&display=swap" rel="stylesheet">
     
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        brand: {
-                            lavender: '#DBC0F9',
-                            aqua: '#C2DEDB',
-                            'buff-orange': '#FFBB7C',
-                            'vibrant-orange': '#FF7420',
-                            dark: '#0E1E1E',
-                            'off-white': '#F6F6F8'
-                        }
-                    },
-                    fontFamily: {
-                        'heading': ['Lexend', 'sans-serif'],
-                        'body': ['Lexend', 'sans-serif']
-                    }
-                }
-            }
-        }
-    </script>
+
     
     <style>
         body {
@@ -505,13 +484,34 @@
             return 'CODE128';
         }
 
+        /** EAN/UPC: comprobar el dígito sin corregir ni reinterpretar el identificador. */
+        function controlCodigoValido(valor) {
+            if (!/^\d+$/.test(valor)) return false;
+            const datos = valor.slice(0, -1);
+            const suma = [...datos].reverse().reduce((total, digito, indice) =>
+                total + Number(digito) * (indice % 2 === 0 ? 3 : 1), 0);
+            return (10 - suma % 10) % 10 === Number(valor.at(-1));
+        }
+
+        function mostrarCodigoNoValido(svg, valor) {
+            const aviso = document.createElement('span');
+            aviso.className = 'font-mono text-xs';
+            aviso.textContent = `${valor} · Código no válido: revisar en origen`;
+            svg.replaceWith(aviso);
+        }
+
         /** Dibuja todos los códigos de barras pendientes dentro de un contenedor. */
         function dibujarCodigos(contenedor) {
             contenedor.querySelectorAll('svg[data-codigo]').forEach(svg => {
                 const valor = svg.dataset.codigo;
+                const formato = formatoDeCodigo(valor);
+                if (formato !== 'CODE128' && !controlCodigoValido(valor)) {
+                    mostrarCodigoNoValido(svg, valor);
+                    return;
+                }
                 try {
                     JsBarcode(svg, valor, {
-                        format: formatoDeCodigo(valor),
+                        format: formato,
                         width: 1.4,
                         height: 40,
                         displayValue: true,
@@ -523,9 +523,8 @@
                         lineColor: '#000000'
                     });
                 } catch (error) {
-                    // Un EAN con el dígito de control mal: se deja el número a la vista
-                    console.error(`Código de barras no válido: ${valor}`, error);
-                    svg.outerHTML = `<span class="font-mono text-xs">${valor}</span>`;
+                    // Conservar el valor original; no fabricar otro EAN ni cambiar a CODE128.
+                    mostrarCodigoNoValido(svg, valor);
                 }
             });
         }

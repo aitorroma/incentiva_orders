@@ -39,7 +39,7 @@ globalThis.XLSX = {};
 globalThis.alert = (m) => { throw new Error('alert inesperado: ' + m); };
 globalThis.setTimeout = (fn) => fn();
 
-const app = new Function(`${js}\n; return { processData, allData, campo, texto, sedeDe, esDomicilio, codigoDe, lineasDe, direccionCompleta, svgDeCodigo, formatoDeCodigo, COL, LINEA, filterPedidos, ordenarFilas, fechaOrden, numeroOrden, valorOrdenPedido, lineasOrdenadas };`)();
+const app = new Function(`${js}\n; return { processData, allData, campo, texto, sedeDe, esDomicilio, codigoDe, lineasDe, direccionCompleta, svgDeCodigo, formatoDeCodigo, COL, LINEA, filterPedidos, ordenarFilas, fechaOrden, numeroOrden, valorOrdenPedido, lineasOrdenadas, controlCodigoValido, dibujarCodigos };`)();
 
 nodo('agruparSedes').checked = false;
 nodo('ordenPedidos').value = 'cliente';
@@ -193,6 +193,29 @@ comprueba('volver a marcar agrupa sedes', ordenCodigos(), ['ORD-2026-000003', 'O
 nodo('agruparSedes').checked = false;
 app.filterPedidos();
 comprueba('conserva criterio al desmarcar', nodo('ordenPedidos').value, 'codigo');
+
+// ─── Validación de códigos sin falsear identificadores ───
+for (const codigo of ['8437003431321', '8437000951235', '8437003431185', '8437000951112', '8437011116035', '8410526002931']) {
+    comprueba('rechaza control incorrecto ' + codigo, app.controlCodigoValido(codigo), false);
+}
+for (const codigo of ['8410128000400', '96385074', '036000291452']) {
+    comprueba('acepta EAN/UPC correcto ' + codigo, app.controlCodigoValido(codigo), true);
+}
+let llamadasBarcode = [];
+globalThis.JsBarcode = (svg, valor, opciones) => { llamadasBarcode.push([valor, opciones.format]); };
+const svgInvalido = { dataset: { codigo: '8437003431321' }, replaceWith(aviso) { this.aviso = aviso.textContent; } };
+const svgValido = { dataset: { codigo: '8410128000400' } };
+const svgTexto = { dataset: { codigo: 'ABC-123' } };
+app.dibujarCodigos({ querySelectorAll: () => [svgInvalido, svgValido, svgTexto] });
+comprueba('no intenta generar EAN inválido ni cambia formato', llamadasBarcode, [['8410128000400', 'EAN13'], ['ABC-123', 'CODE128']]);
+comprueba('aviso conserva identificador original', svgInvalido.aviso, '8437003431321 · Código no válido: revisar en origen');
+globalThis.JsBarcode = () => { throw new Error('rechazado'); };
+const svgRechazado = { dataset: { codigo: 'ABC' }, replaceWith(aviso) { this.aviso = aviso.textContent; } };
+app.dibujarCodigos({ querySelectorAll: () => [svgRechazado] });
+comprueba('error imprevisto también deja aviso visible', svgRechazado.aviso, 'ABC · Código no válido: revisar en origen');
+comprueba('sin Tailwind CDN de desarrollo', pagina.includes('cdn.tailwindcss.com'), false);
+const cssProduccion = fs.readFileSync(path.join(aqui, '..', 'assets', 'tailwind.css'), 'utf8');
+comprueba('CSS compilado con colores y responsive', cssProduccion.includes('.bg-brand-vibrant-orange') && cssProduccion.includes('.md\\:grid-cols-2'), true);
 
 console.log(fallos === 0 ? '\nTodo correcto.' : `\n${fallos} comprobaciones fallidas.`);
 process.exit(fallos ? 1 : 0);
