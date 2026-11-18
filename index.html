@@ -361,6 +361,13 @@
                             </button>
                         </div>
                     </div>
+                    <label for="agruparSedes" class="mt-4 flex items-center gap-2 text-sm font-semibold text-brand-dark">
+                        <input id="agruparSedes" type="checkbox" checked onchange="filterPedidos()" aria-describedby="agruparSedesAyuda" class="w-4 h-4 rounded border-gray-300 accent-orange-600">
+                        Ordenar por sede y después por apellidos
+                    </label>
+                    <p id="agruparSedesAyuda" class="mt-1 text-xs text-gray-500">Desmarca la casilla para elegir otro criterio de ordenación de las hojas.</p>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-4"><div><label for="ordenPedidos" class="block text-sm font-semibold text-brand-dark mb-2">Ordenar hojas por</label><select id="ordenPedidos" disabled onchange="filterPedidos()" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-vibrant-orange focus:border-transparent"><option value="cliente">Cliente / apellidos</option><option value="sede">Sede</option><option value="codigo">Código del pedido</option><option value="fecha">Fecha</option><option value="dni">DNI</option><option value="email">Email</option><option value="direccion">Dirección</option><option value="ciudad">Población</option><option value="provincia">Provincia</option><option value="cp">Código postal</option><option value="pais">País</option><option value="telefono">Teléfono</option><option value="total">Total (puntos)</option><option value="estado">Estado</option><option value="envio">Método de envío</option><option value="comentarios">Comentarios</option><option value="productos">Número de productos</option><option value="unidades">Unidades totales</option><option value="original">Orden del Excel</option></select></div><div><label for="direccionPedidos" class="block text-sm font-semibold text-brand-dark mb-2">Sentido de las hojas</label><select id="direccionPedidos" onchange="filterPedidos()" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-vibrant-orange focus:border-transparent"><option value="asc">Ascendente (A–Z / menor a mayor)</option><option value="desc">Descendente (Z–A / mayor a menor)</option></select></div><div><label for="ordenProductos" class="block text-sm font-semibold text-brand-dark mb-2">Ordenar productos por</label><select id="ordenProductos" onchange="filterPedidos()" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-vibrant-orange focus:border-transparent"><option value="original">Orden del Excel</option><option value="nombre">Nombre</option><option value="cantidad">Cantidad</option><option value="sku">SKU</option><option value="barcode">Código de barras</option></select></div><div><label for="direccionProductos" class="block text-sm font-semibold text-brand-dark mb-2">Sentido de los productos</label><select id="direccionProductos" onchange="filterPedidos()" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-vibrant-orange focus:border-transparent"><option value="asc">Ascendente (A–Z / menor a mayor)</option><option value="desc">Descendente (Z–A / mayor a menor)</option></select></div></div>
+                    <p class="mt-2 text-xs text-gray-500">Las fechas se ordenan cronológicamente y los valores vacíos quedan al final. La impresión mantiene este orden.</p>
                     <div class="mt-4 flex items-center justify-between">
                         <span id="pedidosCount" class="text-sm text-gray-600 font-semibold"></span>
                         <div class="text-xs text-gray-500 italic">
@@ -804,6 +811,62 @@
             filterPedidos();
         }
 
+        // Comparación española natural: 2 antes de 10, sin distinguir mayúsculas/tildes.
+        const comparador = new Intl.Collator('es', { sensitivity: 'base', numeric: true });
+
+        function ordenarFilas(filas, valor, direccion) {
+            return filas.map(fila => ({ fila, clave: valor(fila) })).sort((a, b) => {
+                const vacioA = a.clave === '' || a.clave == null;
+                const vacioB = b.clave === '' || b.clave == null;
+                if (vacioA || vacioB) return Number(vacioA) - Number(vacioB);
+                const diferencia = typeof a.clave === 'number' && typeof b.clave === 'number'
+                    ? a.clave - b.clave : comparador.compare(String(a.clave), String(b.clave));
+                return direccion === 'desc' ? -diferencia : diferencia;
+            }).map(item => item.fila);
+        }
+
+        function numeroOrden(valor) {
+            if (String(valor ?? '').trim() === '') return '';
+            const numero = typeof valor === 'number' ? valor
+                : Number(String(valor).trim().replace(/\s/g, '').replace(/\.(?=\d{3}(?:[.,]|$))/g, '').replace(',', '.'));
+            return Number.isFinite(numero) ? numero : '';
+        }
+
+        function fechaOrden(valor) {
+            if (typeof valor === 'number') return (valor - 25569) * 86400000;
+            const cadena = String(valor ?? '').trim();
+            if (!cadena) return '';
+            const partes = cadena.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
+            if (partes) {
+                const [, dia, mes, anio, hora = 0, minuto = 0, segundo = 0] = partes;
+                const fecha = new Date(Date.UTC(+anio, +mes - 1, +dia, +hora, +minuto, +segundo));
+                return fecha.getUTCFullYear() === +anio && fecha.getUTCMonth() === +mes - 1 && fecha.getUTCDate() === +dia
+                    && +hora < 24 && +minuto < 60 && +segundo < 60 ? fecha.getTime() : '';
+            }
+            // ISO únicamente: evitar interpretar fechas españolas como mes/día.
+            const fecha = /^\d{4}-\d{2}-\d{2}(?:T|$)/.test(cadena) ? Date.parse(cadena) : NaN;
+            return Number.isFinite(fecha) ? fecha : '';
+        }
+
+        function valorOrdenPedido(pedido, orden) {
+            if (orden === 'cliente') return pedido.CLIENTE_FORMATTED || '';
+            if (orden === 'sede') return pedido.SEDE || '';
+            if (orden === 'productos') return lineasDe(pedido).length;
+            if (orden === 'unidades') return lineasDe(pedido).reduce((suma, linea) => suma + (numeroOrden(campo(linea, LINEA.cantidad)) || 0), 0);
+            if (orden === 'fecha') return fechaOrden(campo(pedido, COL.fecha));
+            if (orden === 'total') return numeroOrden(campo(pedido, COL.total));
+            return COL[orden] ? texto(pedido, COL[orden]) : '';
+        }
+
+        function lineasOrdenadas(pedido) {
+            const lineas = lineasDe(pedido);
+            const orden = document.getElementById('ordenProductos').value;
+            if (!orden || orden === 'original') return lineas;
+            return ordenarFilas(lineas, linea => orden === 'cantidad'
+                ? numeroOrden(campo(linea, LINEA.cantidad)) : texto(linea, LINEA[orden]),
+                document.getElementById('direccionProductos').value);
+        }
+
         function filterPedidos() {
             const sedeFilter = document.getElementById('sedeFilter').value;
             const usuarioFilter = document.getElementById('usuarioFilter').value;
@@ -815,8 +878,18 @@
                 return match;
             });
 
-            // Ordenar alfabéticamente por apellido (CLIENTE_FORMATTED)
-            filteredData.sort((a, b) => (a.CLIENTE_FORMATTED || '').localeCompare(b.CLIENTE_FORMATTED || '', 'es', { sensitivity: 'base' }));
+            const agruparSedes = document.getElementById('agruparSedes').checked;
+            const selectorOrden = document.getElementById('ordenPedidos');
+            selectorOrden.disabled = agruparSedes;
+            const orden = agruparSedes ? 'sedeCliente' : (selectorOrden.value || 'cliente');
+            const direccion = document.getElementById('direccionPedidos').value;
+            if (orden === 'sedeCliente' || orden === 'sede') {
+                // Ordenaciones estables: la sede es la clave principal y el cliente la secundaria.
+                filteredData = ordenarFilas(filteredData, p => valorOrdenPedido(p, 'cliente'), direccion);
+                filteredData = ordenarFilas(filteredData, p => valorOrdenPedido(p, 'sede'), direccion);
+            } else if (orden !== 'original') {
+                filteredData = ordenarFilas(filteredData, p => valorOrdenPedido(p, orden), direccion);
+            }
 
             const totalProductos = filteredData.reduce((sum, pedido) => sum + lineasDe(pedido).length, 0);
 
@@ -835,7 +908,7 @@
             let html = '';
 
             filteredData.forEach((pedido, index) => {
-                const lineasPedido = lineasDe(pedido);
+                const lineasPedido = lineasOrdenadas(pedido);
                 const codigoPedido = codigoDe(pedido);
 
                 const tipoEnvio = esDomicilio(pedido)
