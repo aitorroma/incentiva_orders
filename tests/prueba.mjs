@@ -25,7 +25,7 @@ const nodos = new Map();
 const nodo = (id) => {
     if (!nodos.has(id)) {
         nodos.set(id, {
-            id, innerHTML: '', textContent: '', value: '',
+            id, innerHTML: '', textContent: '', value: '', dataset: {},
             classList: { add() {}, remove() {}, contains: () => false },
             querySelectorAll: () => [], appendChild() {}, addEventListener() {},
         });
@@ -39,7 +39,7 @@ globalThis.XLSX = {};
 globalThis.alert = (m) => { throw new Error('alert inesperado: ' + m); };
 globalThis.setTimeout = (fn) => fn();
 
-const app = new Function(`${js}\n; return { processData, allData, campo, texto, sedeDe, esDomicilio, codigoDe, lineasDe, direccionCompleta, svgDeCodigo, formatoDeCodigo, COL, LINEA, filterPedidos, ordenarFilas, fechaOrden, numeroOrden, valorOrdenPedido, lineasOrdenadas, controlCodigoValido, dibujarCodigos };`)();
+const app = new Function(`${js}\n; return { processData, allData, campo, texto, sedeDe, esDomicilio, codigoDe, lineasDe, direccionCompleta, svgDeCodigo, formatoDeCodigo, COL, LINEA, filterPedidos, ordenarFilas, fechaOrden, numeroOrden, valorOrdenPedido, lineasOrdenadas, controlCodigoValido, dibujarCodigos, actualizarAvisosCodigos };`)();
 
 nodo('agruparSedes').checked = false;
 nodo('ordenPedidos').value = 'cliente';
@@ -195,6 +195,7 @@ app.filterPedidos();
 comprueba('conserva criterio al desmarcar', nodo('ordenPedidos').value, 'codigo');
 
 // ─── Validación de códigos sin falsear identificadores ───
+nodo('mostrarAvisosCodigos').checked = true;
 for (const codigo of ['8437003431321', '8437000951235', '8437003431185', '8437000951112', '8437011116035', '8410526002931']) {
     comprueba('rechaza control incorrecto ' + codigo, app.controlCodigoValido(codigo), false);
 }
@@ -213,6 +214,23 @@ globalThis.JsBarcode = () => { throw new Error('rechazado'); };
 const svgRechazado = { dataset: { codigo: 'ABC' }, replaceWith(aviso) { this.aviso = aviso.textContent; } };
 app.dibujarCodigos({ querySelectorAll: () => [svgRechazado] });
 comprueba('error imprevisto también deja aviso visible', svgRechazado.aviso, 'ABC · Código no válido: revisar en origen');
+nodo('mostrarAvisosCodigos').checked = false;
+llamadasBarcode = [];
+globalThis.JsBarcode = (...args) => llamadasBarcode.push(args);
+app.dibujarCodigos({ querySelectorAll: () => [svgInvalido] });
+comprueba('sin avisos mantiene número original', svgInvalido.aviso, '8437003431321');
+comprueba('sin avisos no dibuja EAN inválido', llamadasBarcode.length, 0);
+const avisoExistente = { dataset: { codigoNoValido: '8437003431321' }, textContent: '' };
+const queryAnterior = document.querySelectorAll;
+document.querySelectorAll = () => [avisoExistente];
+app.actualizarAvisosCodigos();
+comprueba('desmarcar actualiza avisos existentes', avisoExistente.textContent, '8437003431321');
+nodo('mostrarAvisosCodigos').checked = true;
+app.actualizarAvisosCodigos();
+comprueba('volver a marcar recupera aviso', avisoExistente.textContent, '8437003431321 · Código no válido: revisar en origen');
+document.querySelectorAll = queryAnterior;
+comprueba('avisos activos por defecto', pagina.includes('id="mostrarAvisosCodigos" type="checkbox" checked'), true);
+
 comprueba('sin Tailwind CDN de desarrollo', pagina.includes('cdn.tailwindcss.com'), false);
 const cssProduccion = fs.readFileSync(path.join(aqui, '..', 'assets', 'tailwind.css'), 'utf8');
 comprueba('CSS compilado con colores y responsive', cssProduccion.includes('.bg-brand-vibrant-orange') && cssProduccion.includes('.md\\:grid-cols-2'), true);

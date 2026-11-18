@@ -260,6 +260,10 @@
 
         <!-- Main Content -->
         <div id="mainContent" class="hidden">
+            <label for="mostrarAvisosCodigos" class="no-print mb-4 flex items-center gap-2 text-sm font-semibold text-brand-dark">
+                <input id="mostrarAvisosCodigos" type="checkbox" checked onchange="actualizarAvisosCodigos()" class="w-4 h-4 rounded border-gray-300 accent-orange-600">
+                Mostrar avisos de códigos de barras no válidos
+            </label>
             <!-- Navigation Tabs -->
             <div class="mb-6 no-print">
                 <div class="border-b border-gray-200">
@@ -493,10 +497,22 @@
             return (10 - suma % 10) % 10 === Number(valor.at(-1));
         }
 
+        function textoCodigoNoValido(valor) {
+            return document.getElementById('mostrarAvisosCodigos').checked
+                ? `${valor} · Código no válido: revisar en origen` : valor;
+        }
+
+        function actualizarAvisosCodigos() {
+            document.querySelectorAll('[data-codigo-no-valido]').forEach(aviso => {
+                aviso.textContent = textoCodigoNoValido(aviso.dataset.codigoNoValido);
+            });
+        }
+
         function mostrarCodigoNoValido(svg, valor) {
             const aviso = document.createElement('span');
             aviso.className = 'font-mono text-xs';
-            aviso.textContent = `${valor} · Código no válido: revisar en origen`;
+            aviso.dataset.codigoNoValido = valor;
+            aviso.textContent = textoCodigoNoValido(valor);
             svg.replaceWith(aviso);
         }
 
