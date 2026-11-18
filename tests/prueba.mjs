@@ -229,7 +229,7 @@ nodo('mostrarAvisosCodigos').checked = true;
 app.actualizarAvisosCodigos();
 comprueba('volver a marcar recupera aviso', avisoExistente.textContent, '8437003431321 · Código no válido: revisar en origen');
 document.querySelectorAll = queryAnterior;
-comprueba('avisos activos por defecto', pagina.includes('id="mostrarAvisosCodigos" type="checkbox" checked'), true);
+comprueba('avisos desactivados por defecto', pagina.includes('id="mostrarAvisosCodigos" type="checkbox" checked'), false);
 
 comprueba('sin Tailwind CDN de desarrollo', pagina.includes('cdn.tailwindcss.com'), false);
 const cssProduccion = fs.readFileSync(path.join(aqui, '..', 'assets', 'tailwind.css'), 'utf8');
